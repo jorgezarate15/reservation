@@ -1,0 +1,161 @@
+---
+description: Spring Boot + Java 25 standards for reservation-backend
+alwaysApply: true
+---
+
+# Spring Boot — reservation-backend
+
+## Project context
+
+- **Root**: `ProyectoReservationJava/`
+- **Module**: `reservation-backend/` (Maven)
+- **Base package**: `co.dev.jorgezarate.reservation`
+- **Java**: 25 | **Spring Boot**: 4.0.7
+- **Stack**: Web MVC, Spring Data JPA, PostgreSQL, springdoc-openapi 3.0.2, DevTools
+
+### Current structure
+
+```
+ProyectoReservationJava/
+└── reservation-backend/
+    ├── pom.xml
+    ├── mvnw / mvnw.cmd
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/co/dev/jorgezarate/reservation/
+    │   │   │   └── ReservationBackendApplication.java
+    │   │   └── resources/
+    │   │       └── application.properties
+    │   └── test/
+    │       └── java/co/dev/jorgezarate/reservation/
+    │           └── ReservationBackendApplicationTests.java
+    └── target/   # generated — do not edit
+```
+
+### Target package layout (new code)
+
+Place new code under `co.dev.jorgezarate.reservation`:
+
+| Layer | Package | Responsibility |
+|-------|---------|----------------|
+| API | `.controller` | REST endpoints, HTTP mapping, status codes |
+| Contracts | `.dto` | Request/response **Java records** |
+| Domain | `.model` or `.entity` | JPA entities |
+| Persistence | `.repository` | Spring Data JPA interfaces |
+| Business | `.service` | Use cases, transactions, orchestration |
+| Mapping | `.mapper` | Entity ↔ DTO conversion (MapStruct or manual) |
+| Config | `.config` | Beans, OpenAPI, security, CORS |
+| Errors | `.exception` | Custom exceptions + `@ControllerAdvice` |
+
+## Language and naming
+
+- **All** class, method, field, enum, and record component names in **English**.
+- Classes: `PascalCase` (`ReservationController`, `CreateReservationRequest`).
+- Methods/fields: `camelCase` (`findById`, `reservationDate`).
+- Constants: `UPPER_SNAKE_CASE`.
+- Package names: lowercase, singular nouns (`service`, not `services`).
+- REST paths: kebab-case, plural resources (`/api/v1/reservations`).
+
+## Java 25 practices
+
+- Prefer **records** for immutable DTOs and value objects.
+- Use `var` only when the type is obvious from the right-hand side.
+- Prefer `Optional` for nullable return types in services/repositories; never use `Optional` as method parameters or entity fields.
+- Use `List`, `Set`, `Map` interfaces in signatures; concrete types only when needed.
+- Use **pattern matching** and **switch expressions** where they improve readability.
+- Avoid raw types, unchecked casts, and mutable shared state without synchronization.
+- Do not suppress warnings (`@SuppressWarnings`) unless justified with a comment.
+
+## DTOs — Java records
+
+- All request/response DTOs must be **`public record`** types in `.dto`.
+- Name requests: `CreateXRequest`, `UpdateXRequest`; responses: `XResponse`, `XSummaryResponse`.
+- Validate input with Jakarta Bean Validation on record components (`@NotNull`, `@NotBlank`, `@Future`, etc.).
+- Keep DTOs free of JPA annotations and business logic.
+- Use compact constructors for validation when needed.
+
+```java
+public record CreateReservationRequest(
+    @NotNull Long roomId,
+    @NotNull @Future LocalDateTime startAt,
+    @NotNull @Future LocalDateTime endAt
+) {}
+```
+
+## Javadoc (mandatory)
+
+Every **public** method (including in records, services, controllers, repositories) must have up-to-date Javadoc:
+
+- Short summary in English.
+- `@param` for each parameter.
+- `@return` when not void.
+- `@throws` for declared checked exceptions and important runtime exceptions.
+- Update Javadoc whenever signature or behavior changes.
+
+```java
+/**
+ * Creates a reservation for the given room and time range.
+ *
+ * @param request validated reservation data
+ * @return the created reservation summary
+ * @throws RoomNotAvailableException when the room is already booked
+ */
+public ReservationResponse create(CreateReservationRequest request) { ... }
+```
+
+## Spring Boot architecture
+
+- **Thin controllers**: validate input, delegate to service, return `ResponseEntity` with correct HTTP status.
+- **Services** hold business rules; annotate with `@Transactional` at class or method level (read-only for queries).
+- **Repositories** extend `JpaRepository`; no business logic in repositories.
+- Inject dependencies via **constructor injection** (`@RequiredArgsConstructor` from Lombok is acceptable if already in use; otherwise explicit constructor).
+- Do not expose JPA entities directly from REST APIs — map to DTO records.
+- Use `@RestController` + `@RequestMapping("/api/v1/...")` for versioned APIs.
+
+## REST and HTTP
+
+- `GET` — read | `POST` — create | `PUT` — full update | `PATCH` — partial update | `DELETE` — remove.
+- Return `201 Created` + `Location` header on create; `204 No Content` on delete when appropriate.
+- Use `@Valid` on request body records.
+- Centralize error handling with `@RestControllerAdvice` and consistent error DTO records.
+
+## Persistence (JPA)
+
+- Entities in `.model` or `.entity`; use `@Entity`, explicit `@Table(name = "...")`.
+- Prefer `Long` surrogate keys with `@GeneratedValue(strategy = GenerationType.IDENTITY)`.
+- Lazy associations by default; avoid `FetchType.EAGER` unless justified.
+- Use `@Column(nullable = false)` and constraints in DB migrations when applicable.
+- No `open-in-view`; keep transactions in the service layer.
+
+## Configuration
+
+- Externalize config in `application.properties` or profile-specific files (`application-dev.properties`).
+- Never commit secrets; use env vars or Spring `@ConfigurationProperties`.
+- Document new properties in comments or README when non-obvious.
+
+## OpenAPI (springdoc)
+
+- Annotate controllers with `@Tag`, operations with `@Operation` where useful.
+- DTO record names become schema names; keep them descriptive in English.
+
+## Testing
+
+- Unit tests: JUnit 5 + Mockito for services.
+- Integration tests: `@SpringBootTest` or `@WebMvcTest` for controllers; `@DataJpaTest` for repositories.
+- Test class names: `{ClassUnderTest}Test` or `{ClassUnderTest}IntegrationTest`.
+- Mirror production package structure under `src/test/java`.
+
+## Code quality
+
+- Match existing indentation (tabs in current codebase) and import order.
+- One public top-level type per file; filename matches class name.
+- Remove unused imports and dead code.
+- Prefer meaningful names over abbreviations (`reservationRepository`, not `repo`).
+
+## Do not
+
+- Edit files under `target/`.
+- Add dependencies to `pom.xml` without a clear need.
+- Use Spanish (or other languages) for identifiers or Javadoc.
+- Skip Javadoc on new or modified public methods.
+- Use classes instead of records for DTOs unless inheritance is strictly required.
